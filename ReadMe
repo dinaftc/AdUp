@@ -10,3 +10,7 @@ Before you begin, ensure you have met the following requirements:
 * You have python3  installed  
 * You have installed requirements  `pip install -r requirements.txt`
 * You have jupyter notebook installed
+
+## Reproducibility of Experiments
+
+*
