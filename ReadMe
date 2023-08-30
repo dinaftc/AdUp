@@ -3,7 +3,7 @@ Our work represents a solution for test assignments in educational systems that 
 - Aptitude: It is the learner\'s progression ability when assigned a test that is correctly completed.
 - Learning Gap: It represents the past failures of the learner.
 
-##Prerequisites
+## Prerequisites
 
 Before you begin, ensure you have met the following requirements:
 
@@ -12,5 +12,11 @@ Before you begin, ensure you have met the following requirements:
 * You have jupyter notebook installed
 
 ## Reproducibility of Experiments
+
+Our experiments are divided into three research questions:
+- RQ1: Is the combination of all dimensions well-adapted for attaining mastery and improving skill gain?
+- RQ2.a: Do different settings of the skill update strategy exhibit different results?
+- RQ2.b: Does the choice of the model of learner simulation impact mastery and skill gain?
+- RQ3: Does an application of a meta-strategy that chooses to optimize a subset of dimensions at each iteration, improve mastery achievement?
 
 *
