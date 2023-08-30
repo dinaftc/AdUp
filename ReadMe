@@ -1,9 +1,9 @@
 Our work represents a solution for test assignments in educational systems that defines and combines three learners' dimensions:
-- Expected Perfomance: it is the expected performance of a learner for an assigned test.
-- Aptitude: it is the learner\'s progression ability when assigned a test that is correctly completed.
-- Learning Gap: it represents the past failures of the learner.
+- Expected Performance: It is the expected performance of a learner for an assigned test.
+- Aptitude: It is the learner\'s progression ability when assigned a test that is correctly completed.
+- Learning Gap: It represents the past failures of the learner.
 
-## Prerequisites
+##Prerequisites
 
 Before you begin, ensure you have met the following requirements:
 
