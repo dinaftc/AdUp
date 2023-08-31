@@ -64,7 +64,7 @@ letter2values = {
     'h':[0.7, 1]
 }
 
-ncc_repeat = 3
+ncc_repeat = 1
 
 for k in [3,5]:
     df_results = pd.DataFrame(columns=['student','method','skill_student','Materials','Answers','new_skill_student','step','time','learns_proba'])
