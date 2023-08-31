@@ -64,6 +64,8 @@ letter2values = {
     'h':[0.7, 1]
 }
 
+ncc_repeat = 3
+
 for k in [3,5]:
     df_results = pd.DataFrame(columns=['student','method','skill_student','Materials','Answers','new_skill_student','step','time','learns_proba'])
 
@@ -164,7 +166,7 @@ for k in [3,5]:
                 df_test.loc[~df_test.id.isin(row_ids),'correct'] = answers
 
                 #Skill update
-                new_skill_user, ncc = update_skill(skill_user, df_test[~df_test.id.isin(row_ids)], ncc, 3) # NCC > 1
+                new_skill_user, ncc = update_skill(skill_user, df_test[~df_test.id.isin(row_ids)], ncc, ncc_repeat) # NCC > 1
                 #new_skill_user = update_skill_2(skill_user, df_test[~df_test.id.isin(row_ids)], ncc) # NCC == 1
                 
                 df_train = df_test.copy()
@@ -209,6 +211,6 @@ for k in [3,5]:
 
         cpt_users += 1
 
-        df_results.to_csv(f'bkt_results_{k}_ncc_3.csv', index=False)
+        df_results.to_csv(f'bkt_results_{k}_ncc_{ncc_repeat}.csv', index=False)
     
-    df_results.to_csv(f'bkt_results_{k}_ncc_3.csv', index=False)
+    df_results.to_csv(f'bkt_results_{k}_ncc_{ncc_repeat}.csv', index=False)
