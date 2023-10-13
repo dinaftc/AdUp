@@ -11,6 +11,7 @@ from utils import *
 from random import *
 import time
 
+
 # Data
 data = pd.read_csv('./Data/mat_all.csv')
 data_2 = pd.read_csv('./Data/matmat/answers.csv')
