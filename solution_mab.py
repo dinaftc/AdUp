@@ -8,6 +8,7 @@ from utils import *
 from random import *
 from pyBKT.models import Model
 
+
 def get_selectd_method(strategy, selected, rewarded, rewarded_2, step, epsilon, epsilon_decay = 0.01, epsilon_start = 0.9, epsilon_end = 0.01):
     len_ = len(selected)
 
