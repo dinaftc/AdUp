@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 from random import *
 
-
 def update_skill(skill_learner, df_materials, ncc, window = 3):
     max_skill = skill_learner
     enter = True
