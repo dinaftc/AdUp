@@ -30,4 +30,6 @@ To reproduce the reported results for these questions:
 - Run the file `solution_mab.py` to generate the results of RQ3. The results are generated for N=1, k=3.
   Results are saved in a CSV file. Find a copy file in ```./Results```: ```bkt_results_3_ncc_1_mab.csv``` with k=3.
 
-- Use ```graphs.ipynb``` to generate the different graphs presented in the paper using the results files in ```./Results```.
+- Use ```graphs.ipynb``` to generate the different graphs presented in the paper using the results files in ```./Results```
+
+
