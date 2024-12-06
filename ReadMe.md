@@ -32,4 +32,26 @@ To reproduce the reported results for these questions:
 
 - Use ```graphs.ipynb``` to generate the different graphs presented in the paper using the results files in ```./Results```
 
+## Citation
+This work was publised in the DataEd@SIGMOD 2023:
+```
+@inproceedings{bouarour2023adaptive,
+  title={Adaptive Test Recommendation for Mastery Learning},
+  author={Bouarour, Nassim and Benouaret, Idir and d'Ham, C{\'e}dric and Amer-Yahia, Sihem},
+  booktitle={Proceedings of the 2nd International Workshop on Data Systems Education: Bridging education practice with education research},
+  pages={18--23},
+  year={2023}
+}
+```
 
+Its extension was published in the Transactions on Large Scale Data and Knowledge (TLSDK) Journal:
+```
+@incollection{bouarour2024multi,
+  title={Multi-objective Test Recommendation for Adaptive Learning},
+  author={Bouarour, Nassim and Benouaret, Idir and Amer-Yahia, Sihem},
+  booktitle={Transactions on Large-Scale Data-and Knowledge-Centered Systems LVI: Special Issue on Data Management-Principles, Technologies, and Applications},
+  pages={1--36},
+  year={2024},
+  publisher={Springer}
+}
+```
