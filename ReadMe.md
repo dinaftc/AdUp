@@ -43,15 +43,3 @@ This work was publised in the DataEd@SIGMOD 2023:
   year={2023}
 }
 ```
-
-Its extension was published in the Transactions on Large Scale Data and Knowledge (TLSDK) Journal:
-```
-@incollection{bouarour2024multi,
-  title={Multi-objective Test Recommendation for Adaptive Learning},
-  author={Bouarour, Nassim and Benouaret, Idir and Amer-Yahia, Sihem},
-  booktitle={Transactions on Large-Scale Data-and Knowledge-Centered Systems LVI: Special Issue on Data Management-Principles, Technologies, and Applications},
-  pages={1--36},
-  year={2024},
-  publisher={Springer}
-}
-```
