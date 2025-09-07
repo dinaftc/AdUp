@@ -1,3 +1,11 @@
+"""Adaptive Test Recommendation with Multi-Armed Bandits over MO strategies
+
+This script answers RQ3 by selecting among multi-objective strategies (MOO,
+MOAE, MOAG, MOEG) using different bandit policies (UCB, Epsilon-greedy,
+Softmax, Thompson). It simulates learners with a BKT model and records
+performance and skill progression.
+"""
+
 import pandas as pd
 import numpy as np
 import scipy.sparse as sparse
@@ -10,6 +18,20 @@ from pyBKT.models import Model
 
 
 def get_selectd_method(strategy, selected, rewarded, rewarded_2, step, epsilon, epsilon_decay = 0.01, epsilon_start = 0.9, epsilon_end = 0.01):
+    """Choose an index of a strategy using the specified bandit policy.
+
+    Parameters
+    - strategy: one of {"Epsilon-g", "Decay_epsilon", "Softmax", "Thompson", "Ucb"}
+    - selected: list[int] number of times each arm was selected
+    - rewarded: list[float] cumulative reward (skill gains) per arm
+    - rewarded_2: list[int] count of positive updates per arm
+    - step: int current step (1-based)
+    - epsilon: float base epsilon for epsilon-greedy
+    - epsilon_decay, epsilon_start, epsilon_end: decay settings when applicable
+
+    Returns
+    - sel_method: int index of the selected arm
+    """
     len_ = len(selected)
 
     speed = [rewarded[i]/selected[i] if selected[i] != 0 else 0 for i in range(len_)]

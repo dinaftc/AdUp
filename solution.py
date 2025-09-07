@@ -1,3 +1,13 @@
+"""Adaptive Test Recommendation Experiments (BKT-based simulator)
+
+This script answers RQ1 and RQ2.a by simulating learners with a BKT model
+and evaluating different material selection strategies that optimize the
+following objectives: aptitude (apt), expected performance (exp), and gap.
+
+Runs for k in {3, 5} and saves results to CSV files under the project root.
+See `ReadMe.md` for details and instructions.
+"""
+
 import pandas as pd
 import numpy as np
 import scipy.sparse as sparse
