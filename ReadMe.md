@@ -1,3 +1,5 @@
+## Overview
+
 Our work represents a solution for test assignments in educational systems that defines and combines three learners' dimensions:
 - Expected Performance: It is the expected performance of a learner for an assigned test.
 - Aptitude: It is the learner's progression ability when assigned a test that is correctly completed.
@@ -11,6 +13,11 @@ Before you begin, ensure you have met the following requirements:
 * You have installed requirements  `pip install -r requirements.txt`
 * You have jupyter notebook installed
 
+## Data preparation
+
+- Unzip the dataset file `answers.csv.zip` located in `./Data/matmat/` to produce `answers.csv`.
+- Ensure `./Data/mat_all.csv` is present.
+
 ## Reproducibility of Experiments
 
 Our experiments are divided into three research questions:
@@ -20,7 +27,6 @@ Our experiments are divided into three research questions:
 - RQ3: Does an application of a meta-strategy that chooses to optimize a subset of dimensions at each iteration, improve mastery achievement?
 
 To reproduce the reported results for these questions:
-- Make sure to unzip the data file ```answers.csv``` located in ```./Data/matmat/```.
 - Run the file `solution.py` to generate the results of RQ1. The results are generated for N=1, k=[3, 5].
   Results are saved in a CSV file. Find a copy file in ```./Results```: ```bkt_results_3_ncc_1.csv``` with k=3.
 - Run the same file (`solution.py`) to generate the results of RQ2.a. Make sure before running to change the variable's value ```ncc_repeat``` to change the value of N to value 3.
@@ -31,6 +37,21 @@ To reproduce the reported results for these questions:
   Results are saved in a CSV file. Find a copy file in ```./Results```: ```bkt_results_3_ncc_1_mab.csv``` with k=3.
 
 - Use ```graphs.ipynb``` to generate the different graphs presented in the paper using the results files in ```./Results```
+
+## Quickstart
+
+Run each experiment from the project root after installing requirements and preparing data:
+
+```bash
+python3 solution.py           # RQ1, RQ2.a (BKT simulator)
+python3 solution_irt.py       # RQ2.b (IRT simulator)
+python3 solution_mab.py       # RQ3 (bandit over MO strategies)
+python3 solution_variable_init.py  # BKT with variable prior initialization
+```
+
+Notes:
+- `solution.py` uses `ncc_repeat` to control the NCC window repeat; set to 3 for RQ2.a.
+- `solution_irt.py` requires a working PyTorch installation. GPU is optional.
 
 ## Citation
 This work was publised in the DataEd@SIGMOD 2023:

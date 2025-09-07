@@ -1,3 +1,10 @@
+"""BKT with Variable Initialization for Low-Skill Prior Sections
+
+This script variants the BKT initialization to set high priors for skills at
+or below a chosen starting difficulty. It explores the impact on progression
+when learners begin near different difficulty levels.
+"""
+
 import pandas as pd
 import numpy as np
 import scipy.sparse as sparse

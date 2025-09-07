@@ -1,3 +1,10 @@
+"""Adaptive Test Recommendation Experiments (IRT-based simulator)
+
+This script answers RQ2.b by simulating learners using a neural IRT model
+from EduCDM (GDIRT). It evaluates the same material selection strategies as
+the BKT-based setup and records results. Requires PyTorch and EduCDM.
+"""
+
 import pandas as pd
 import numpy as np
 from pyBKT.models import Model
@@ -65,6 +72,7 @@ letter2values = {
 }
 
 def transform(x, y, z, batch_size, **params):
+    """Create a DataLoader from indices x, item ids y, and labels z."""
     dataset = TensorDataset(
         torch.tensor(x, dtype=torch.int64),
         torch.tensor(y, dtype=torch.int64),

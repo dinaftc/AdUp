@@ -2,7 +2,39 @@ import pandas as pd
 import numpy as np
 from random import *
 
+"""
+Utility functions for adaptive test recommendation and skill updates.
+
+This module provides:
+- Skill update heuristics based on recent correctness history (NCC window)
+- Feature computations for candidate material difficulties: aptitude (apt),
+  expected performance (exp), and recent failure gap (gap)
+- Candidate selection strategies: random, difficulty-stratified random,
+  and multi-objective hill-climbing over combinations of difficulties
+
+Notes on objectives:
+- apt(d, s) increases with (d - s) when d > s, otherwise 0
+- exp(d, seen) increases when past incorrect items are dissimilar to d
+- gap(d, seen) measures recent mismatch to d among last incorrect answers
+
+All hill-climbing routines now accept an explicit parameter `k` (number of
+materials to select) instead of relying on an implicit global.
+"""
+
 def update_skill(skill_learner, df_materials, ncc, window = 3):
+    """Update learner skill using a non-consecutive-correct (NCC) window.
+
+    Parameters
+    - skill_learner: float current learner skill
+    - df_materials: pd.DataFrame with columns [..., 'correct', 'difficulty']
+      representing newly attempted materials in chronological order
+    - ncc: dict mapping difficulty -> recent correctness window (list[int])
+    - window: int size of the NCC sliding window per difficulty
+
+    Returns
+    - new_skill: float updated skill (may stay unchanged)
+    - ncc: updated NCC structure
+    """
     max_skill = skill_learner
     enter = True
     
@@ -36,6 +68,11 @@ def update_skill(skill_learner, df_materials, ncc, window = 3):
     return max_skill, ncc
 
 def update_skill_2(skill_learner, df_materials, ncc, window = 3):
+    """Update learner skill to the highest difficulty of the initial success streak.
+
+    Advances skill to the last difficulty in the prefix of consecutive correct
+    answers; stops at the first incorrect.
+    """
     max_skill = skill_learner
     
     for row in df_materials.itertuples():
@@ -50,6 +87,7 @@ def update_skill_2(skill_learner, df_materials, ncc, window = 3):
     return max_skill
 
 def apt(dif_material, skill_learner):
+    """Aptitude objective: potential skill gain if the item is mastered."""
     diff = dif_material - skill_learner
     
     if diff < 0:
@@ -58,6 +96,12 @@ def apt(dif_material, skill_learner):
     return diff
 
 def exPerf(dif_material, seen_materials, sim_threshold=0.1):
+    """Expected performance proxy based on prior incorrect attempts.
+
+    Computes the average absolute distance in difficulty between the candidate
+    and past incorrect items. Larger distance implies lower similarity to
+    previously failed content, thus higher expected performance here.
+    """
 
     incorrect_seen = [prev_mat for prev_mat in seen_materials if prev_mat[2]==1]    
     incorrect_seen = [abs(prev_mat[1]-dif_material) for prev_mat in incorrect_seen]
@@ -68,6 +112,7 @@ def exPerf(dif_material, seen_materials, sim_threshold=0.1):
     return sum(incorrect_seen)/len(incorrect_seen)
 
 def gap(dif_material, seen_materials, window_l = 3):
+    """Recent failure gap over the last `window_l` incorrect attempts."""
     incorrect_seen = [prev_mat for prev_mat in seen_materials if prev_mat[2]==0]
     incorrect_seen = incorrect_seen[::-1][:window_l]
     
@@ -79,6 +124,10 @@ def gap(dif_material, seen_materials, window_l = 3):
     return sum(incorrect_seen)/len(incorrect_seen)
 
 def get_sets(data, skill_learner, seen_materials, sim_threshold=0.2, windows_l=3):
+    """Compute objective dictionaries for each candidate difficulty > skill.
+
+    Returns three dicts mapping difficulty -> (apt, exp, gap) components.
+    """
     diff2apt = {}
     diff2exp = {}
     diff2gap = {}
@@ -94,11 +143,16 @@ def get_sets(data, skill_learner, seen_materials, sim_threshold=0.2, windows_l=3
 
 #Random
 def get_random_material(df_materials, skill_learner, k = 3):
+    """Sample k random materials strictly above current skill, sorted by difficulty."""
     materials = df_materials[df_materials.difficulty > skill_learner].sample(frac=1).head(k)
     materials = materials.sort_values('difficulty')
     return materials
 
 def get_alternate_random_material(df_materials, skill_learner, alternate, letter2values, ite, k = 3):
+    """Alternate random sampler across difficulty bands defined by `letter2values`.
+
+    Chooses a band by cycling through `alternate` using iteration index `ite`.
+    """
     ite1 = ite%len(alternate)
     min_diff, max_diff = letter2values[ alternate[ite1] ]
     materials = df_materials[(df_materials.difficulty >= min_diff) & (df_materials.difficulty < max_diff)]
@@ -107,6 +161,7 @@ def get_alternate_random_material(df_materials, skill_learner, alternate, letter
     return materials
 
 def get_random_on_difficulties_material(df_materials, skill_learner, k = 3):
+    """Randomly sample one material from k distinct difficulty values above skill."""
     materials = df_materials[df_materials.difficulty > skill_learner]#.sample(frac=1).head(k)
     difficulties_list = list(materials.difficulty.unique())
 
@@ -123,6 +178,7 @@ def get_random_on_difficulties_material(df_materials, skill_learner, k = 3):
 
 # Multi-objective
 def get_neighboors(set_tests, diff_hier, skill_learner):
+    """Enumerate neighbor sets by advancing one difficulty using `diff_hier`."""
     liste_neighbours = []
     
     for i in range(len(set_tests)):
@@ -137,24 +193,28 @@ def get_neighboors(set_tests, diff_hier, skill_learner):
     return liste_neighbours
 
 def dominated_2dim_apt_exp(elem, list_elem):
+    """Check domination in (apt, exp): dominated if other has >= apt and < exp."""
     for e in list_elem:
         if e[0] >= elem[0] and e[1] < elem[1]:
             return True
     return False
 
 def dominated_2dim_exp_gap(elem, list_elem):
+    """Check domination in (exp, gap): dominated if other has < exp and < gap."""
     for e in list_elem:
         if e[0] < elem[0] and e[1] < elem[1]:
             return True
     return False
 
 def dominated_2dim_apt_gap(elem, list_elem):
+    """Check domination in (apt, gap): dominated if other has >= apt and < gap."""
     for e in list_elem:
         if e[0] >= elem[0] and e[1] < elem[1]:
             return True
     return False
 
 def dominated_3_dim(elem, list_elem):
+    """Check domination in (apt, exp, gap): dominated if other >=apt and <exp and <gap."""
     for e in list_elem:
         if e[0] >= elem[0] and e[1] < elem[1] and e[2] < elem[2]:
             return True
@@ -162,7 +222,11 @@ def dominated_3_dim(elem, list_elem):
 
 
 # 3 Objectives
-def hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests):
+def hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests, k):
+    """Hill-climb over sets of size k optimizing (apt, exp, gap) jointly.
+
+    Returns a DataFrame of k selected difficulties with merged objective values.
+    """
     max_cpt = 300
     cpt = 0
     
@@ -236,7 +300,7 @@ def get_mo_3_materials(df_materials, df_difficulties, skill_learner, diff2tests,
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests, k)
         pre_results.append(sol)
     
     results = [tuple(df[['apt','exp','gap']].mean()) for df in pre_results]
@@ -262,7 +326,8 @@ def get_mo_3_materials(df_materials, df_difficulties, skill_learner, diff2tests,
 
 
 # 2 Objectives (ExPerf - Gap)
-def hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests):
+def hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests, k):
+    """Hill-climb maximizing expected performance (exp) over sets of size k."""
     max_cpt = 300
     cpt = 0
     
@@ -319,7 +384,7 @@ def get_mo_exp_gap_materials(df_materials, df_difficulties, skill_learner, diff2
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests, k)
         pre_results.append(sol)
     
     results = [tuple(df[['exp','gap']].mean()) for df in pre_results]
@@ -345,7 +410,8 @@ def get_mo_exp_gap_materials(df_materials, df_difficulties, skill_learner, diff2
 
 
 # 2 Objectives (Apt - Gap)
-def hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests):
+def hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests, k):
+    """Hill-climb maximizing aptitude (apt) over sets of size k."""
     max_cpt = 300
     cpt = 0
     
@@ -402,7 +468,7 @@ def get_mo_apt_gap_materials(df_materials, df_difficulties, skill_learner, diff2
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests, k)
         pre_results.append(sol)
     
     results = [tuple(df[['apt','gap']].mean()) for df in pre_results]
@@ -431,7 +497,7 @@ def get_mo_apt_exp_materials(df_materials, df_difficulties, skill_learner, diff2
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests, k)
         pre_results.append(sol)
     
     results = [tuple(df[['apt','exp']].mean()) for df in pre_results]
@@ -457,6 +523,7 @@ def get_mo_apt_exp_materials(df_materials, df_difficulties, skill_learner, diff2
 
 # 1 Objective
 def get_apt_materials(df_materials, df_difficulties, skill_learner, k = 5):
+    """Pick top-k by aptitude among materials strictly above the current skill."""
     results = df_materials[df_materials.difficulty > skill_learner].merge(df_difficulties, on='difficulty')
     max_apt = results.apt.max()
     results1 = results[results.apt == max_apt]
@@ -468,6 +535,7 @@ def get_apt_materials(df_materials, df_difficulties, skill_learner, k = 5):
         return results.head(k).sort_values('difficulty')
 
 def get_exp_materials(df_materials, df_difficulties, skill_learner, k = 5):
+    """Pick top-k by lowest expected performance proxy (hardest expected)."""
     results = df_materials[df_materials.difficulty > skill_learner].merge(df_difficulties, on='difficulty')
     max_exp = results.exp.min()
     results1 = results[results.exp == max_exp]
@@ -479,6 +547,7 @@ def get_exp_materials(df_materials, df_difficulties, skill_learner, k = 5):
         return results.head(k).sort_values('difficulty')
 
 def get_gap_materials(df_materials, df_difficulties, skill_learner, k = 5):
+    """Pick top-k by smallest recent failure gap among candidates above skill."""
     results = df_materials[df_materials.difficulty > skill_learner].merge(df_difficulties, on='difficulty')
     min_gap = results.gap.min()
     results1 = results[results.gap == min_gap]
