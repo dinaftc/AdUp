@@ -1,0 +1,50 @@
+# Virtual environments
+.venv
+.venv*/
+venv/
+env/
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# OS/IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing/Type-checking
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Build/Dist
+build/
+dist/
+
+# Logs
+*.log
+
+# Local env files
+.env
+.env.*
+.envrc
+
+# Tool caches
+.cache/
+
+
+
+# Data archives/temp
+Data/matmat/__MACOSX/
+Data/**/*.zip
+.venv39
+.ipynb_checkout
