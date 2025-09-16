@@ -1,3 +1,4 @@
+from http.client import responses
 import pandas as pd
 import numpy as np
 from random import *
@@ -162,7 +163,7 @@ def dominated_3_dim(elem, list_elem):
 
 
 # 3 Objectives
-def hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests):
+def hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests,k):
     max_cpt = 300
     cpt = 0
     
@@ -236,7 +237,7 @@ def get_mo_3_materials(df_materials, df_difficulties, skill_learner, diff2tests,
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_3_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests,k)
         pre_results.append(sol)
     
     results = [tuple(df[['apt','exp','gap']].mean()) for df in pre_results]
@@ -262,7 +263,7 @@ def get_mo_3_materials(df_materials, df_difficulties, skill_learner, diff2tests,
 
 
 # 2 Objectives (ExPerf - Gap)
-def hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests):
+def hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests,k):
     max_cpt = 300
     cpt = 0
     
@@ -319,7 +320,7 @@ def get_mo_exp_gap_materials(df_materials, df_difficulties, skill_learner, diff2
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests,k)
         pre_results.append(sol)
     
     results = [tuple(df[['exp','gap']].mean()) for df in pre_results]
@@ -345,7 +346,7 @@ def get_mo_exp_gap_materials(df_materials, df_difficulties, skill_learner, diff2
 
 
 # 2 Objectives (Apt - Gap)
-def hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests):
+def hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests,k):
     max_cpt = 300
     cpt = 0
     
@@ -402,7 +403,7 @@ def get_mo_apt_gap_materials(df_materials, df_difficulties, skill_learner, diff2
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_apt_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests,k)
         pre_results.append(sol)
     
     results = [tuple(df[['apt','gap']].mean()) for df in pre_results]
@@ -431,7 +432,7 @@ def get_mo_apt_exp_materials(df_materials, df_difficulties, skill_learner, diff2
     pre_results = []
     
     for tim in range(times):
-        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests)
+        sol = hill_climbing_exp_dim(df_materials, df_difficulties, skill_learner, diff_hier, diff2tests,k)
         pre_results.append(sol)
     
     results = [tuple(df[['apt','exp']].mean()) for df in pre_results]
@@ -489,3 +490,423 @@ def get_gap_materials(df_materials, df_difficulties, skill_learner, k = 5):
         results = results.sort_values('gap')
         return results.head(k).sort_values('difficulty')
 
+
+
+EXEC_SYSTEM_PROMPT_TEMPLATE = """
+You are an optimization executor for mastery learning. 
+You must directly choose k tests from the provided candidates to: 
+(1) maximize expected performance = similarity to the learner’s successful tests (by difficulty proximity), 
+(2) maximize aptitude = (test_difficulty - skill), 
+(3) minimize gap = distance to failed tests (by difficulty proximity). 
+
+Hard constraints:
+- Select exactly k unique items.
+- All selected tests must have difficulty strictly greater than the learner’s current skill.
+- Return ONLY valid JSON, no prose.
+
+Scoring guidance (internal):
+- For similarity/distance, treat proximity in difficulty as inverse distance: closer to successes -> higher exPerf; farther from failures -> lower gap.
+- Normalize each score to [0,1] within the candidate set to balance objectives.
+- Aggregate by a weighted sum with neutral weights exPerf=apt=gap=1, but subtract gap (i.e., exPerf + apt - gap). Ties: prefer higher aptitude.
+
+Example (for illustration only):
+skill=0.40, S=[0.42,0.45], F=[0.60]; candidates=[(id:101,d:0.46),(102,0.55),(103,0.62)]; k=2
+- exPerf higher when candidate difficulty ~ S (0.46 close to S), 
+- apt = d - 0.40,
+- gap penalizes closeness to F=0.60.
+Expected: pick 101 and 102 (balances aptitude without getting too close to failure at 0.60).
+
+
+Output strictly as JSON following the provided schema.
+Do NOT reveal your reasoning. Return final numbers only.
+"""
+import json
+from typing import Callable
+
+def get_executor_materials(
+    data: pd.DataFrame,
+    df_difficulties: pd.DataFrame,
+    skill_user: float,
+    diff2tests: dict = None,
+    diff_hier: dict = None,
+    k: int = 1,
+    chat_fn: Callable = None,
+    seen_success_fail: dict = None,
+    max_candidates: int = 120
+) -> pd.DataFrame:
+    """
+    LLM-executor: build context (instr/know/mem/state/query), ask LLM
+    for k test ids. Returns DataFrame with columns ['item','difficulty'].
+    """
+
+    assert chat_fn is not None, "Provide chat_fn(messages)->dict that returns {'content': <string>}"
+
+    # --- Candidate pool: strictly harder than current skill ---
+    cand = data[(data['difficulty'] > skill_user) & (data['type'] == 'test')][['id','difficulty']].copy()
+    cand = cand.sort_values('difficulty').head(max_candidates)  # bound context size
+
+    # --- Learner memory: successes & failures from df_train (passed via seen_success_fail) ---
+    # seen_success_fail = {'S': [(item_id, diff), ...], 'F': [(item_id, diff), ...]}
+    S = seen_success_fail.get('S', [])
+    print(S)
+    F = seen_success_fail.get('F', [])
+    print(F)
+
+    # --- Build compact knowledge blobs the model can reason over without tools ---
+    # Keep only what’s essential to compute: id, difficulty
+    candidates = [{'item': int(r.id), 'difficulty': float(r.difficulty)} for r in cand.itertuples(index=False)]
+    successes = [{'item': int(i), 'difficulty': float(d)} for (i, d) in S][-60:]  # limit context
+    failures  = [{'item': int(i), 'difficulty': float(d)} for (i, d) in F][-60:] # limit context
+
+    # --- Prompt messages ---
+    system_msg = EXEC_SYSTEM_PROMPT_TEMPLATE
+    user_msg = json.dumps({
+        "objectives": {
+            "maximize": ["expected_performance", "aptitude"],
+            "minimize": ["gap"],
+            "constraints": {"k": k, "strictly_harder_than_skill": True}
+        },
+        "definitions": {
+            "expected_performance": "exPerf(l,t) = similarity(t, S) based on difficulty proximity",
+            "aptitude": "apt(l,t) = d_t - skill",
+            "gap": "gap(l,t) = distance(t, F) based on difficulty proximity"
+        },
+        "state": {"skill": skill_user},
+        "memory": {"successes": successes, "failures": failures},
+        "knowledge": {"candidates": candidates},
+        "query": "Select the next batch of k test IDs",
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "selection": {"type": "array", "items": {"type": "integer"}},
+                "scores": {
+                    "type": "array",
+                    "items": {"type": "object", "properties": {
+                        "item": {"type": "integer"},
+                        "exPerf": {"type": "number"},
+                        "apt": {"type": "number"},
+                        "gap": {"type": "number"}
+                    }, "required": ["item","exPerf","apt","gap"]}
+                },
+                "notes": {"type": "string"}
+            },
+            "required": ["selection","scores"]
+        }
+    }, ensure_ascii=False)
+
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg}
+    ]
+
+    resp = chat_fn(messages) 
+    print(resp)
+    try:
+        payload = json.loads(resp["content"])
+        picked = payload["selection"][:k]
+        print(picked)
+    except Exception:
+        print('Exception')
+        # Fallback: take the k easiest candidates
+        picked = [c['item'] for c in candidates[:k]]
+
+    out = data[data.id.isin(picked)][['id','difficulty']].rename(columns={'id':'item'})
+    if len(out) < k:
+        print('output shorter than k')
+        print(len(out))
+        print(k)
+        # pad deterministically with nearest difficulties
+        need = k - len(out)
+        extra = [c['item'] for c in candidates if c['item'] not in set(picked)][:need]
+        out = pd.concat([out, data[data.id.isin(extra)][['id','difficulty']].rename(columns={'id':'item'})], ignore_index=True)
+
+    return out[['item','difficulty']]
+
+
+
+# ---- Orchestrator tool adapters (wrap your existing functions) ----
+
+def _tool_aptitude(skill_user: float, t_difficulty: float) -> float:
+    # uses your apt(diff, skill)
+    return apt(t_difficulty, skill_user)
+
+def _tool_experf(t_difficulty: float, seen: list, sim_threshold: float = 0.2) -> float:
+    # uses your exPerf(diff, seen, sim_threshold)
+    return exPerf(t_difficulty, seen, sim_threshold)
+
+def _tool_gap(t_difficulty: float, seen: list, window_l: int = 3) -> float:
+    # uses your gap(diff, seen, window_l)
+    return gap(t_difficulty, seen, window_l)
+
+def _tool_neighbors(diff2tests: dict, difficulty: float, k_each: int = 3) -> list[int]:
+    # fetch up to k_each concrete item ids at this difficulty
+    return diff2tests.get(float(difficulty), [])[:k_each]
+
+def orch_tools_spec():
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "sim_expected_performance",
+                "description": "Return exPerf for a target difficulty (lower is better).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "item_difficulty": {"type": "number"},
+                        "sim_threshold": {"type": "number", "default": 0.2}
+                    },
+                    "required": ["item_difficulty"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "aptitude",
+                "description": "Return aptitude = difficulty - skill (higher is better).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "skill_user": {"type": "number"},
+                        "item_difficulty": {"type": "number"}
+                    },
+                    "required": ["skill_user","item_difficulty"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "gap",
+                "description": "Return gap = distance to recent failures (lower is better).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "item_difficulty": {"type": "number"},
+                        "window_l": {"type": "integer", "default": 3}
+                    },
+                    "required": ["item_difficulty"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "neighbors",
+                "description": "Return concrete item IDs available at a given difficulty.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "difficulty": {"type": "number"},
+                        "k_each": {"type": "integer", "default": 3}
+                    },
+                    "required": ["difficulty"]
+                },
+            },
+        },
+    ]
+
+
+def ORCH_SYSTEM_PROMPT() -> str:
+    return (
+        "You are an ORCHESTRATOR for mastery-learning item selection.\n"
+        "Use the provided tools (function calling) to get all numeric scores; do not compute them yourself.\n\n"
+        "Objectives (according to current metric semantics):\n"
+        "  • MINIMIZE exPerf (it is average distance to past successes).\n"
+        "  • MAXIMIZE aptitude = difficulty - skill.\n"
+        "  • MINIMIZE gap (distance to recent failures).\n"
+        "Constraints:\n"
+        "  • Select exactly k unique tests, each with difficulty strictly > skill.\n"
+        "Protocol:\n"
+        "  • Call tools as needed to compare candidates.\n"
+        "  • When done, return ONLY a JSON object:\n"
+        "    {\"type\":\"final_selection\",\"items\":[{\"item\":int,\"difficulty\":float},...],\"rationale\":\"...\"}\n"
+        "No extra prose."
+    )
+
+
+import json
+from openai import OpenAI
+
+def my_chat_fn_orch(messages, *, tool_functions, model="gpt-4o"):
+    """
+    messages: list[{"role":"system"|"user"|"assistant"|"tool","content":str, ...}]
+    tool_functions: dict[str, callable] mapping function name -> python callable
+    """
+    client = OpenAI()
+
+    # We loop until the assistant returns content with no tool_calls
+    while True:
+        resp = client.chat.completions.create(
+            model=model,
+            # DO NOT pass response_format here; it prevents tool_calls in some versions.
+            messages=messages,
+            tools=orch_tools_spec(),
+            tool_choice="auto",
+        )
+
+        msg = resp.choices[0].message
+        tool_calls = getattr(msg, "tool_calls", None)
+
+        # Always add the assistant message to the transcript
+        messages.append({"role": "assistant", "content": msg.content or "", "tool_calls": tool_calls})
+
+        if tool_calls:
+            # Execute each tool call locally and append role=tool messages
+            for tc in tool_calls:
+                fn_name = tc.function.name
+                raw_args = tc.function.arguments or "{}"
+                try:
+                    args = json.loads(raw_args)
+                except Exception:
+                    args = {}
+
+                # Dispatch to your Python tool
+                if fn_name not in tool_functions:
+                    result = {"error": f"unknown tool '{fn_name}'"}
+                else:
+                    try:
+                        if fn_name == "sim_expected_performance":
+                            # needs seen_materials injected at call site
+                            result = tool_functions[fn_name](**args)
+                        elif fn_name == "aptitude":
+                            result = tool_functions[fn_name](**args)
+                        elif fn_name == "gap":
+                            result = tool_functions[fn_name](**args)
+                        elif fn_name == "neighbors":
+                            result = tool_functions[fn_name](**args)
+                        else:
+                            result = tool_functions[fn_name](**args)
+                    except Exception as e:
+                        result = {"error": f"{type(e).__name__}: {str(e)}"}
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,   # <-- REQUIRED to satisfy the API
+                    "content": json.dumps(result)
+                })
+            # Continue loop: the next assistant turn will consider tool results
+            continue
+
+        # No tool calls → return final assistant message
+        return {"content": msg.content or "{}"}
+
+
+def get_orchestrator_materials(
+    data: pd.DataFrame,
+    df_difficulties: pd.DataFrame,
+    skill_user: float,
+    diff2tests: dict,
+    diff_hier: dict,
+    k: int,
+    chat_fn,  # we'll pass my_chat_fn_orch
+    seen_success_fail: dict,
+    max_candidates: int = 200
+) -> pd.DataFrame:
+
+    # Candidate pool (strictly > skill)
+    cand = (
+        data[(data['type']=='test') & (data['difficulty'] > skill_user)]
+        [['id','difficulty']].drop_duplicates()
+        .sort_values('difficulty')
+        .head(max_candidates)
+        .rename(columns={'id':'item'})
+    )
+    candidates_preview = cand.head(40).to_dict(orient='records')
+
+    # Build seen list matching your metric signatures: (item, difficulty, correct)
+    S = seen_success_fail.get('S', [])
+    F = seen_success_fail.get('F', [])
+    seen_list = []
+    seen_list.extend([(int(i), float(d), 1) for (i, d) in S])
+    seen_list.extend([(int(i), float(d), 0) for (i, d) in F])
+
+    # System + User messages
+    messages = [
+        {"role": "system", "content": ORCH_SYSTEM_PROMPT()},
+        {"role": "user", "content": json.dumps({
+            "task": "select_next_batch",
+            "k": k,
+            "skill_user": float(skill_user),
+            "candidates_preview": candidates_preview,
+            "seen_materials": seen_list,
+            "output_schema": {
+                "type": "object",
+                "required": ["type","items"],
+                "properties": {
+                    "type": {"enum": ["final_selection"]},
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["difficulty"],
+                            "properties": {
+                                "item": {"type": "integer"},
+                                "difficulty": {"type": "number"}
+                            }
+                        }
+                    },
+                    "rationale": {"type": "string"}
+                }
+            }
+        })}
+    ]
+
+    # Provide stateful closures to the tool loop
+    def sim_expected_performance(item_difficulty: float, sim_threshold: float = 0.2):
+        return _tool_experf(item_difficulty=item_difficulty, seen_materials=seen_list, sim_threshold=sim_threshold)
+
+    def aptitude(skill_user_: float, item_difficulty: float):
+        return _tool_aptitude(skill_user=skill_user_, item_difficulty=item_difficulty)
+
+    def gap(item_difficulty: float, window_l: int = 3):
+        return _tool_gap(item_difficulty=item_difficulty, seen_materials=seen_list, window_l=window_l)
+
+    def neighbors(difficulty: float, k_each: int = 3):
+        return _tool_neighbors(diff2tests=diff2tests, difficulty=difficulty, k_each=k_each)
+
+    tool_functions = {
+        "sim_expected_performance": sim_expected_performance,
+        "aptitude": aptitude,
+        "gap": gap,
+        "neighbors": neighbors,
+    }
+
+    # Call the function-calling chat loop
+    
+    resp = my_chat_fn_orch(messages, tool_functions=tool_functions, model="gpt-4o")
+
+    # Parse final selection
+    try:
+        payload = json.loads(resp["content"])
+        if payload.get("type") == "final_selection":
+            selected = payload.get("items", [])
+        else:
+            selected = []
+    except Exception:
+        selected = []
+
+    # If difficulties only, map to concrete items via neighbors/diff2tests
+    df_out = pd.DataFrame(selected)
+    if not df_out.empty and "item" not in df_out.columns and "difficulty" in df_out.columns:
+        rows = []
+        for d in df_out["difficulty"].tolist():
+            pool = diff2tests.get(float(d), [])
+            if pool:
+                rows.append({"item": int(pool[0]), "difficulty": float(d)})
+        df_out = pd.DataFrame(rows)
+
+    # Fallbacks / validation
+    if df_out.empty:
+        tmp = cand.copy()
+        tmp["apt"] = tmp["difficulty"].apply(lambda d: apt(d, skill_user))
+        df_out = tmp.sort_values("apt", ascending=False).head(k)[["item","difficulty"]]
+
+    df_out = df_out[df_out["difficulty"] > skill_user].drop_duplicates(subset=["item"])
+    if len(df_out) < k:
+        need = k - len(df_out)
+        already = set(df_out["item"])
+        padding = cand[~cand["item"].isin(already)].head(need)
+        df_out = pd.concat([df_out, padding], ignore_index=True)
+
+    return df_out[["item","difficulty"]].head(k)
